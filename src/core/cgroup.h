@@ -130,6 +130,7 @@ typedef struct CGroupContext {
         bool memory_oom_group;
 
         bool delegate;
+        bool delegate_log_filter_patterns;
         CGroupMask delegate_controllers;
         CGroupMask disable_controllers;
         char *delegate_subgroup;

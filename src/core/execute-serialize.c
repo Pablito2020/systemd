@@ -265,6 +265,10 @@ static int exec_cgroup_context_serialize(const CGroupContext *c, FILE *f) {
         if (r < 0)
                 return r;
 
+        r = serialize_bool_elide(f, "exec-cgroup-context-delegate-log-filter-patterns", c->delegate_log_filter_patterns);
+        if (r < 0)
+                return r;
+
         r = serialize_item(f, "exec-cgroup-context-managed-oom-swap", managed_oom_mode_to_string(c->moom_swap));
         if (r < 0)
                 return r;
@@ -634,6 +638,11 @@ static int exec_cgroup_context_deserialize(CGroupContext *c, FILE *f) {
                         if (r < 0)
                                 return r;
                         c->delegate = r;
+                } else if ((val = startswith(l, "exec-cgroup-context-delegate-log-filter-patterns="))) {
+                        r = parse_boolean(val);
+                        if (r < 0)
+                                return r;
+                        c->delegate_log_filter_patterns = r;
                 } else if ((val = startswith(l, "exec-cgroup-context-managed-oom-swap="))) {
                         c->moom_swap = managed_oom_mode_from_string(val);
                         if (c->moom_swap < 0)

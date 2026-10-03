@@ -531,6 +531,7 @@ void cgroup_context_dump(Unit *u, FILE* f, const char *prefix) {
                 "%sDevicePolicy: %s\n"
                 "%sDisableControllers: %s\n"
                 "%sDelegate: %s\n"
+                "%sDelegateLogFilterPatterns: %s\n"
                 "%sManagedOOMSwap: %s\n"
                 "%sManagedOOMMemoryPressure: %s\n"
                 "%sManagedOOMMemoryPressureLimit: " PERMYRIAD_AS_PERCENT_FORMAT_STR "\n"
@@ -570,6 +571,7 @@ void cgroup_context_dump(Unit *u, FILE* f, const char *prefix) {
                 prefix, cgroup_device_policy_to_string(c->device_policy),
                 prefix, strempty(disable_controllers_str),
                 prefix, delegate_str,
+                prefix, yes_no(c->delegate_log_filter_patterns),
                 prefix, managed_oom_mode_to_string(c->moom_swap),
                 prefix, managed_oom_mode_to_string(c->moom_mem_pressure),
                 prefix, PERMYRIAD_AS_PERCENT_FORMAT_VAL(UINT32_SCALE_TO_PERMYRIAD(c->moom_mem_pressure_limit)),
@@ -915,6 +917,7 @@ static void cgroup_coredump_xattr_apply(Unit *u) {
 }
 
 static void cgroup_delegate_xattr_apply(Unit *u) {
+        CGroupContext *c;
         bool b;
 
         assert(u);
@@ -934,6 +937,12 @@ static void cgroup_delegate_xattr_apply(Unit *u) {
                 else
                         unit_remove_xattr_graceful(u, xn);
         }
+
+        c = unit_get_cgroup_context(u);
+        if (b && c && c->delegate_log_filter_patterns)
+                unit_set_xattr_graceful(u, "trusted.journald_log_filter_patterns_delegate", "1", 1);
+        else
+                unit_remove_xattr_graceful(u, "trusted.journald_log_filter_patterns_delegate");
 }
 
 static void cgroup_survive_xattr_apply(Unit *u) {

@@ -260,6 +260,7 @@
 {{type}}.TasksAccounting,                     config_parse_bool,                                  0,                                  offsetof({{type}}, cgroup_context.tasks_accounting)
 {{type}}.TasksMax,                            config_parse_tasks_max,                             0,                                  offsetof({{type}}, cgroup_context.tasks_max)
 {{type}}.Delegate,                            config_parse_delegate,                              0,                                  offsetof({{type}}, cgroup_context)
+{{type}}.DelegateLogFilterPatterns,           config_parse_bool,                                  0,                                  offsetof({{type}}, cgroup_context.delegate_log_filter_patterns)
 {{type}}.DelegateSubgroup,                    config_parse_delegate_subgroup,                     0,                                  offsetof({{type}}, cgroup_context)
 {{type}}.DisableControllers,                  config_parse_disable_controllers,                   0,                                  offsetof({{type}}, cgroup_context)
 {{type}}.IPAccounting,                        config_parse_bool,                                  0,                                  offsetof({{type}}, cgroup_context.ip_accounting)
