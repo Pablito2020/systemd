@@ -376,6 +376,7 @@ static int property_get_cgroup_nft_set(
 const sd_bus_vtable bus_cgroup_vtable[] = {
         SD_BUS_VTABLE_START(0),
         SD_BUS_PROPERTY("Delegate", "b", bus_property_get_bool, offsetof(CGroupContext, delegate), 0),
+        SD_BUS_PROPERTY("DelegateLogFilterPatterns", "b", bus_property_get_bool, offsetof(CGroupContext, delegate_log_filter_patterns), 0),
         SD_BUS_PROPERTY("DelegateControllers", "as", property_get_delegate_controllers, 0, 0),
         SD_BUS_PROPERTY("DelegateSubgroup", "s", NULL, offsetof(CGroupContext, delegate_subgroup), 0),
         SD_BUS_PROPERTY("CPUWeight", "t", NULL, offsetof(CGroupContext, cpu_weight), 0),
@@ -762,6 +763,22 @@ static int bus_cgroup_set_transient_property(
                                 unit_write_settingf(u, flags, name, "%s=", name);
                         else
                                 unit_write_settingf(u, flags, name, "%s=%" PRIu64, name, t);
+                }
+
+                return 1;
+        } else if (streq(name, "DelegateLogFilterPatterns")) {
+                int b;
+
+                if (!UNIT_VTABLE(u)->can_delegate)
+                        return sd_bus_error_set(reterr_error, SD_BUS_ERROR_INVALID_ARGS, "Delegation not available for unit type");
+
+                r = sd_bus_message_read(message, "b", &b);
+                if (r < 0)
+                        return r;
+
+                if (!UNIT_WRITE_FLAGS_NOOP(flags)) {
+                        c->delegate_log_filter_patterns = b;
+                        unit_write_settingf(u, flags, name, "DelegateLogFilterPatterns=%s", yes_no(b));
                 }
 
                 return 1;

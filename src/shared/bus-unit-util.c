@@ -2469,6 +2469,7 @@ static const BusProperty cgroup_properties[] = {
         { "TasksAccounting",                       bus_append_parse_boolean                      },
         { "IPAccounting",                          bus_append_parse_boolean                      },
         { "CoredumpReceive",                       bus_append_parse_boolean                      },
+        { "DelegateLogFilterPatterns",             bus_append_parse_boolean                      },
         { "CPUWeight",                             bus_append_cg_cpu_weight_parse                },
         { "StartupCPUWeight",                      bus_append_cg_cpu_weight_parse                },
         { "IOWeight",                              bus_append_cg_weight_parse                    },
