@@ -6,6 +6,13 @@
 #include "pcre2-util.h"
 
 #if HAVE_PCRE2
+#define PCRE2_RESTRICTED_MAX_PATTERN_LENGTH 4096
+#define PCRE2_RESTRICTED_MAX_COMPILED_LENGTH (256 * 1024)
+#define PCRE2_RESTRICTED_MAX_PARENTHESES_NESTING 128
+#define PCRE2_RESTRICTED_MATCH_LIMIT 100000
+#define PCRE2_RESTRICTED_DEPTH_LIMIT 1000
+#define PCRE2_RESTRICTED_HEAP_LIMIT 1024
+
 DLSYM_PROTOTYPE(pcre2_match_data_create) = NULL;
 DLSYM_PROTOTYPE(pcre2_match_data_free) = NULL;
 DLSYM_PROTOTYPE(pcre2_code_free) = NULL;
@@ -13,6 +20,7 @@ DLSYM_PROTOTYPE(pcre2_compile) = NULL;
 DLSYM_PROTOTYPE(pcre2_get_error_message) = NULL;
 DLSYM_PROTOTYPE(pcre2_match) = NULL;
 DLSYM_PROTOTYPE(pcre2_get_ovector_pointer) = NULL;
+static void *pcre2_dl = NULL;
 
 DEFINE_HASH_OPS_WITH_KEY_DESTRUCTOR(
         pcre2_code_hash_ops_free,
@@ -26,8 +34,6 @@ const struct hash_ops pcre2_code_hash_ops_free = {};
 
 int dlopen_pcre2(int log_level) {
 #if HAVE_PCRE2
-        static void *pcre2_dl = NULL;
-
         LIBPCRE2_NOTE(suggested);
 
         /* So here's something weird: PCRE2 actually renames the symbols exported by the library via C
@@ -50,6 +56,133 @@ int dlopen_pcre2(int log_level) {
 #else
         return log_full_errno(log_level, SYNTHETIC_ERRNO(EOPNOTSUPP),
                               "PCRE2 support is not compiled in.");
+#endif
+}
+
+int pattern_compile_restricted(const char *pattern, pcre2_code **ret) {
+#if HAVE_PCRE2
+        typedef pcre2_compile_context* (*context_create_t)(pcre2_general_context*);
+        typedef void (*context_free_t)(pcre2_compile_context*);
+        typedef int (*set_limit_t)(pcre2_compile_context*, PCRE2_SIZE);
+        typedef int (*set_nesting_t)(pcre2_compile_context*, uint32_t);
+        _cleanup_(pcre2_code_freep) pcre2_code *code = NULL;
+        pcre2_compile_context *context;
+        context_create_t create;
+        context_free_t free_context;
+        set_limit_t set_length, set_compiled_length;
+        set_nesting_t set_nesting;
+        PCRE2_SIZE erroroffset;
+        int errorcode, r;
+
+        assert(pattern);
+        assert(ret);
+
+        if (strlen(pattern) > PCRE2_RESTRICTED_MAX_PATTERN_LENGTH)
+                return log_error_errno(SYNTHETIC_ERRNO(E2BIG), "Pattern exceeds maximum length of %zu bytes.",
+                                       (size_t) PCRE2_RESTRICTED_MAX_PATTERN_LENGTH);
+
+        r = dlopen_pcre2(LOG_DEBUG);
+        if (r < 0)
+                return r;
+
+        create = dlsym(pcre2_dl, STRINGIFY(pcre2_compile_context_create));
+        free_context = dlsym(pcre2_dl, STRINGIFY(pcre2_compile_context_free));
+        set_length = dlsym(pcre2_dl, STRINGIFY(pcre2_set_max_pattern_length));
+        set_compiled_length = dlsym(pcre2_dl, STRINGIFY(pcre2_set_max_pattern_compiled_length));
+        set_nesting = dlsym(pcre2_dl, STRINGIFY(pcre2_set_parens_nest_limit));
+        if (!create || !free_context || !set_length || !set_compiled_length || !set_nesting)
+                return -EOPNOTSUPP;
+
+        context = create(NULL);
+        if (!context)
+                return -ENOMEM;
+
+        r = set_length(context, PCRE2_RESTRICTED_MAX_PATTERN_LENGTH);
+        if (r >= 0)
+                r = set_compiled_length(context, PCRE2_RESTRICTED_MAX_COMPILED_LENGTH);
+        if (r >= 0)
+                r = set_nesting(context, PCRE2_RESTRICTED_MAX_PARENTHESES_NESTING);
+        if (r >= 0)
+                code = sym_pcre2_compile((PCRE2_SPTR8) pattern, PCRE2_ZERO_TERMINATED, 0,
+                                         &errorcode, &erroroffset, context);
+        free_context(context);
+        if (r < 0)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Failed to set PCRE2 pattern limits: %d", r);
+        if (!code) {
+                unsigned char buf[LINE_MAX];
+
+                r = sym_pcre2_get_error_message(errorcode, buf, sizeof(buf));
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Bad pattern '%s' at offset %zu: %s",
+                                       pattern, (size_t) erroroffset,
+                                       r < 0 ? "unknown error" : (char*) buf);
+        }
+
+        *ret = TAKE_PTR(code);
+        return 0;
+#else
+        return -EOPNOTSUPP;
+#endif
+}
+
+int pattern_matches_restricted(pcre2_code *compiled_pattern, const char *message, size_t size) {
+#if HAVE_PCRE2
+        typedef pcre2_match_context* (*context_create_t)(pcre2_general_context*);
+        typedef void (*context_free_t)(pcre2_match_context*);
+        typedef int (*set_limit_t)(pcre2_match_context*, uint32_t);
+        _cleanup_(pcre2_match_data_freep) pcre2_match_data *md = NULL;
+        pcre2_match_context *context;
+        context_create_t create;
+        context_free_t free_context;
+        set_limit_t set_match, set_depth, set_heap;
+        int r;
+
+        assert(compiled_pattern);
+        assert(message);
+
+        create = dlsym(pcre2_dl, STRINGIFY(pcre2_match_context_create));
+        free_context = dlsym(pcre2_dl, STRINGIFY(pcre2_match_context_free));
+        set_match = dlsym(pcre2_dl, STRINGIFY(pcre2_set_match_limit));
+        set_depth = dlsym(pcre2_dl, STRINGIFY(pcre2_set_depth_limit));
+        set_heap = dlsym(pcre2_dl, STRINGIFY(pcre2_set_heap_limit));
+        if (!create || !free_context || !set_match || !set_depth || !set_heap)
+                return -EOPNOTSUPP;
+
+        context = create(NULL);
+        if (!context)
+                return -ENOMEM;
+
+        r = set_match(context, PCRE2_RESTRICTED_MATCH_LIMIT);
+        if (r >= 0)
+                r = set_depth(context, PCRE2_RESTRICTED_DEPTH_LIMIT);
+        if (r >= 0)
+                r = set_heap(context, PCRE2_RESTRICTED_HEAP_LIMIT);
+        if (r < 0) {
+                free_context(context);
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Failed to set PCRE2 match limits: %d", r);
+        }
+
+        md = sym_pcre2_match_data_create(1, NULL);
+        if (!md) {
+                free_context(context);
+                return log_oom();
+        }
+
+        r = sym_pcre2_match(compiled_pattern, (PCRE2_SPTR8) message, size, 0, 0, md, context);
+        free_context(context);
+
+        if (r == PCRE2_ERROR_NOMATCH)
+                return false;
+        if (r < 0) {
+                unsigned char buf[LINE_MAX];
+                int k;
+
+                k = sym_pcre2_get_error_message(r, buf, sizeof(buf));
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Pattern matching failed: %s",
+                                       k < 0 ? "unknown error" : (char*) buf);
+        }
+        return true;
+#else
+        return -EOPNOTSUPP;
 #endif
 }
 
