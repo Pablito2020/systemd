@@ -54,6 +54,8 @@ typedef struct ClientContext {
 
         Set *log_filter_allowed_patterns;
         Set *log_filter_denied_patterns;
+        Set *user_log_filter_allowed_patterns;
+        Set *user_log_filter_denied_patterns;
 } ClientContext;
 
 int client_context_get(

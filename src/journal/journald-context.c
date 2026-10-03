@@ -191,6 +191,8 @@ static void client_context_reset(Manager *m, ClientContext *c) {
 
         c->log_filter_allowed_patterns = set_free(c->log_filter_allowed_patterns);
         c->log_filter_denied_patterns = set_free(c->log_filter_denied_patterns);
+        c->user_log_filter_allowed_patterns = set_free(c->user_log_filter_allowed_patterns);
+        c->user_log_filter_denied_patterns = set_free(c->user_log_filter_denied_patterns);
 
         c->capability_quintet = CAPABILITY_QUINTET_NULL;
 }
