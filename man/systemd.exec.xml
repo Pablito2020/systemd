@@ -3666,8 +3666,9 @@ StandardInputData=V2XigLJyZSBubyBzdHJhbmdlcnMgdG8gbG92ZQpZb3Uga25vdyB0aGUgcnVsZX
         values are indexed may also be used to implement cross-unit log record matching. Assign an empty
         string to reset the list.</para>
 
-        <para>Note that this functionality is currently only available in system services, not in per-user
-        services.</para>
+        <para>Per-user services may use this functionality when their system-managed ancestor has
+        <varname>DelegateLogFilterPatterns=</varname> enabled. Filters supplied by per-user services are
+        subject to resource limits and are ignored if they cannot be evaluated safely.</para>
 
         <xi:include href="version-info.xml" xpointer="v236"/></listitem>
       </varlistentry>

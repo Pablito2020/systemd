@@ -1465,6 +1465,15 @@ DeviceAllow=/dev/loop-control
       </varlistentry>
 
       <varlistentry>
+        <term><varname>DelegateLogFilterPatterns=</varname></term>
+
+        <listitem><para>Takes a boolean argument. When enabled for a service or scope with
+        <varname>Delegate=</varname> enabled, permits units in its delegated control group subtree to use
+        <varname>LogFilterPatterns=</varname>. This is a system manager policy: setting it in a user manager
+        does not grant the user manager this authority. Defaults to false.</para></listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><varname>DelegateSubgroup=</varname></term>
 
         <listitem>
