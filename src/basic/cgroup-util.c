@@ -854,6 +854,38 @@ int cg_path_get_unit_path(const char *path, char **ret) {
         return 0;
 }
 
+/* Returns 1 with an allocated path to the deepest non-slice unit, or 0 with NULL if none is found.
+ * The path retains its original escaping and separators. On allocation failure, ret is unchanged. */
+int cg_find_deepest_non_slice_unit(const char *cgroup, char **ret) {
+        _cleanup_free_ char *unit_cgroup = NULL;
+        int r;
+
+        assert(cgroup);
+        assert(ret);
+
+        /* Validate cgroup-unescaped names, retaining the last matching component's path. */
+        for (const char *p = cgroup; *p;) {
+                _cleanup_free_ char *name = NULL;
+                const char *end = strchrnul(p, '/');
+
+                name = strndup(p, end - p);
+                if (!name)
+                        return -ENOMEM;
+                if (!endswith(name, ".slice") && unit_name_is_valid(cg_unescape(name), UNIT_NAME_PLAIN|UNIT_NAME_INSTANCE)) {
+                        char *path = strndup(cgroup, end - cgroup);
+                        if (!path)
+                                return -ENOMEM;
+                        free_and_replace(unit_cgroup, path);
+                }
+
+                p = *end ? end + 1 : end;
+        }
+
+        r = !!unit_cgroup;
+        *ret = TAKE_PTR(unit_cgroup);
+        return r;
+}
+
 int cg_pid_get_unit_full(pid_t pid, char **ret_unit, char **ret_subgroup) {
         int r;
 
